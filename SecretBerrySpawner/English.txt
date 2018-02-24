@@ -1,0 +1,1 @@
+﻿	MODOPTIONS_BERRYSPAWNER_ENABLED= 			Spawn Secret Berry

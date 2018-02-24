@@ -9,6 +9,7 @@ using Celeste.Mod;
 using MonoMod;
 using Monocle;
 using Microsoft.Xna.Framework;
+using FMOD.Studio;
 
 
 namespace Celeste.Mod.SecretBerrySpawner
@@ -16,6 +17,8 @@ namespace Celeste.Mod.SecretBerrySpawner
     public class BerrySpawnerModule : EverestModule {
 
         public static BerrySpawnerModule Instance;
+
+        public static bool Enabled = false;
 
         public override Type SettingsType => typeof(BerrySpawnerModuleSettings);
 
@@ -46,10 +49,10 @@ namespace Celeste.Mod.SecretBerrySpawner
 
 
         public void DoTheThing(Level level, int startIndex, bool minimal, bool quickReset) {
-            if (!Settings.Spawn)
+            if (!Enabled)
                 return;
             else
-                Settings.Spawn = false;
+                Enabled = false;
             bool correctLevel = CheckLevel(level);
             if (correctLevel)
                 SpawnBerry(level);
@@ -86,6 +89,14 @@ namespace Celeste.Mod.SecretBerrySpawner
                     return true;
             }
             return false;
+        }
+
+        public override void CreateModMenuSection(TextMenu menu, bool inGame, EventInstance snapshot) {
+            base.CreateModMenuSection(menu, inGame, snapshot);
+
+            menu.Add(new TextMenu.Button(Dialog.Clean("MODOPTIONS_BERRYSPAWNER_ENABLED")).Pressed(() => {
+                Enabled = true;
+            }));
         }
     }
 }
