@@ -1,32 +1,115 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Microsoft.Xna.Framework;
 using System.IO;
 using System.Reflection;
 using MonoMod.Detour;
 
-namespace Celeste.Mod.LevelRandomizer
-{
-    public class LevelRandomizer : EverestModule {
 
+namespace Celeste.Mod.LevelRandomizer{
+
+    public class LevelRandomizer : EverestModule {
+        
         public static LevelRandomizer Instance;
 
         private static string logfile = "TransitionLog.txt";
 
-        public override Type SettingsType => typeof(LevelRandomizerSettings);
+        private static List<TransitionMetadata> transitionMetadata;
 
-        LevelRandomizerSettings Settings => (LevelRandomizerSettings)Instance._Settings;
+        public override Type SettingsType => typeof(LevelRandomizerSettings);   
+        static LevelRandomizerSettings Settings => (LevelRandomizerSettings)Instance._Settings;
 
         private readonly static MethodInfo m_TransitionTo = typeof(Level).GetMethod("TransitionTo", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
 
         public delegate void d_TransitionTo(Level self, LevelData next, Vector2 direction);
 
         public static d_TransitionTo orig_TransitionTo;
+    
+        public LevelRandomizer() {
+            Instance = this;
+        }
 
-        private class Transition {
+        public override void Load() {
+
+            // detour TransitionTo
+            Type t_LevelRandomizer = GetType();
+            orig_TransitionTo = m_TransitionTo.Detour<d_TransitionTo>(t_LevelRandomizer.GetMethod("TransitionTo")); 
+
+            Everest.Events.LevelEnter.OnGo += LoadLevels;
+
+            // TODO do I even need this?
+            LoadInternalResources();
+        }
+
+        public override void Unload() {
+            RuntimeDetour.Undetour(m_TransitionTo);
+            Everest.Events.LevelEnter.OnGo -= LoadLevels;
+        }
+
+        public static void TransitionTo(Level self, LevelData next, Vector2 direction) {
+            if (Settings.Enabled) {
+                Player player = self.Entities.FindFirst<Player>();
+                Debug.LogTransition(next, direction, player);
+                TransitionMetadata metadata = getRandomTransitionData();
+                LevelData newNext = getLevelDataByName(metadata.nextName, self.Session);
+                int offsetX, offsetY;
+                offsetX = metadata.directionX * 10;
+                offsetY = metadata.directionY * 10;
+                if (metadata.directionY < 0)
+                    offsetY *= 3;
+                player.Speed = new Vector2(0,0);
+                Vector2 newPlayerPos = new Vector2(metadata.playerX + offsetX, metadata.playerY + offsetY);
+                Vector2 newDirection = new Vector2(metadata.directionX, metadata.directionY);
+                SetPlayerPosition(self, newPlayerPos);
+                orig_TransitionTo(self, newNext, newDirection);
+            }
+            else {
+                orig_TransitionTo(self, next, direction);
+            }
+        }
+
+        private static LevelData getLevelDataByName(string name, Session session) {
+            LevelData toReturn = null;
+
+            foreach (LevelData ld in session.MapData.Levels) {
+                if (ld.Name == name)
+                    toReturn = ld;
+            }
+
+            return toReturn;
+        }
+
+        protected static TransitionMetadata getRandomTransitionData() {
+            int num = transitionMetadata.Count();
+            var rng = new Random();
+            int at = rng.Next(0, num);
+            TransitionMetadata toReturn = transitionMetadata[at];
+            transitionMetadata.RemoveAt(at);
+            return toReturn;
+        }
+
+        private void LoadInternalResources() {
+        }
+
+        public static void LoadLevels(Session session, bool fromSaveData) {
+            AssetMetadata metadata = Everest.Content.Get("Transitions/" + session.MapData.Filename);
+            if (metadata == null) {
+                Logger.Log("LevelRandomizer", session.MapData.Filename + " not found. Check your mod installation or contact the mod author");
+            }
+            transitionMetadata = new List<TransitionMetadata>(metadata.Deserialize<List<TransitionMetadata>>());
+        }
+
+        public static void SetPlayerPosition(Level level, Vector2 position) {
+            Player player = level.Entities.FindFirst<Player>();
+            player.Position = position;
+            Console.WriteLine("player:");
+            Console.WriteLine("X: " + player.X + " Y: " + player.Y);
+            Console.WriteLine("CameraOffset");
+            Console.WriteLine("X: " + level.Session.LevelData.CameraOffset.X + " Y: " + level.Session.LevelData.CameraOffset.Y);
+        }
+
+        protected class Transition {
             public Vector2 vector;
             public LevelData data;
 
@@ -36,82 +119,26 @@ namespace Celeste.Mod.LevelRandomizer
             }
         }
 
-        public static void TransitionTo(Level self, LevelData next, Vector2 direction) {
-            Player player = self.Entities.FindFirst<Player>();
-            //LogTransition(next, direction);
-            LevelData data = getEnd(self);
-            //Vector2 newPos = getNewPos(self, data);
-            Vector2 newPlayerPos = PredictNewPlayerPos(next, data, player);
-            Console.WriteLine();
-            Console.WriteLine("predicted newPos:");
-            Console.WriteLine("X: " + newPlayerPos.X + "Y: " + newPlayerPos.Y);
-            SetPlayerPosition(self, newPlayerPos);
-            orig_TransitionTo(self, data, direction);
+        protected class TransitionMetadata {
+            public int playerX { get; set; }
+            public int playerY { get; set; }
+            public int directionX { get; set; }
+            public int directionY { get; set; }
+            public string nextName { get; set; }
         }
 
-
-        public override void Load() {
-            Type t_LevelRandomizer = GetType();
-            orig_TransitionTo = m_TransitionTo.Detour<d_TransitionTo>(t_LevelRandomizer.GetMethod("TransitionTo"));
-            Everest.Events.Level.OnPause += MovePlayer;
-
-        }
-
-        public override void Unload() {
-            RuntimeDetour.Undetour(m_TransitionTo);
-            Everest.Events.Level.OnPause -= MovePlayer;
-        }
-
-        public void MovePlayer(Level level, int i, bool a, bool b) {
-            Player player = level.Entities.FindFirst<Player>();
-            Console.WriteLine("X: " + player.X + " Y: " + player.Y);
-        }
-
-        private static LevelData getEnd(Level level) {
-            foreach (LevelData data in level.Session.MapData.Levels) {
-                if (data.Name == "end_6")
-                    return data;
+        protected static class Debug {
+            public static void LogTransition(LevelData next, Vector2 direction, Player player, string comment = "") {
+                List<string> lines = new List<string> { };
+                lines.Add(comment);
+                lines.Add("player.X = " + player.X);
+                lines.Add("player.Y = " + player.Y);
+                lines.Add("direction.X = " + direction.X);
+                lines.Add("direction.Y = " + direction.Y);
+                lines.Add("next.Name = " + next.Name);
+                lines.Add(Environment.NewLine);
+                File.AppendAllLines(logfile, lines.AsEnumerable());
             }
-            return null;
-        }
-
-        public static void Randomize(LevelData next, Vector2 direction) {
-
-        }
-
-        public static void LogTransition(LevelData next, Vector2 direction, string comment = "") {
-            List<string> lines = new List<string> { };
-            lines.Add(comment);
-            lines.Add("direction.X = " + direction.X);
-            lines.Add("direction.Y = " + direction.Y);
-            lines.Add("next.Name = " + next.Name);
-            lines.Add(Environment.NewLine);
-            File.AppendAllLines(logfile, lines.AsEnumerable());
-        }
-
-        public static Vector2 PredictNewPlayerPos(LevelData levelData, LevelData levelData2, Player player) {
-            int delta = levelData2.Bounds.Left - levelData.Bounds.Left;
-            Vector2 currentPos = player.Position;
-            Vector2 position = new Vector2(currentPos.X + delta, currentPos.Y);
-            return position;
-            
-        }
-
-        public static void SetPlayerPosition(Level level, Vector2 position) {
-            Player player = level.Entities.FindFirst<Player>();
-            player.Position = position;
-            Console.WriteLine("player:");
-            Console.WriteLine("X: " + player.X + " Y: " + player.Y);
-            Console.WriteLine("CameraOFfset");
-            Console.WriteLine("X: " + level.Session.LevelData.CameraOffset.X + " Y: " + level.Session.LevelData.CameraOffset.Y);
-        }
-
-        public static Vector2 getNewPos(Level level, LevelData newPos) {
-            LevelData oldPos = level.Session.LevelData;
-            Vector2 direction;
-            direction = newPos.CameraOffset - oldPos.CameraOffset;
-
-            return direction;
         }
     }
 }

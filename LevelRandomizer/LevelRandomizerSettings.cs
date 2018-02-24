@@ -9,5 +9,6 @@ namespace Celeste.Mod.LevelRandomizer {
     public class LevelRandomizerSettings : EverestModuleSettings{
 
         public bool Enabled { get; set; } = false;
+
     }
 }

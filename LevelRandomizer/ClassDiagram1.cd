@@ -1,0 +1,36 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<ClassDiagram MajorVersion="1" MinorVersion="1">
+  <Class Name="Celeste.Mod.LevelRandomizer.LevelRandomizer">
+    <Position X="5.5" Y="0.75" Width="2.5" />
+    <Compartments>
+      <Compartment Name="Nested Types" Collapsed="false" />
+    </Compartments>
+    <NestedTypes>
+      <Delegate Name="Celeste.Mod.LevelRandomizer.LevelRandomizer.d_TransitionTo" Collapsed="true">
+        <TypeIdentifier>
+          <NewMemberFileName>LevelRandomizer.cs</NewMemberFileName>
+        </TypeIdentifier>
+      </Delegate>
+      <Class Name="Celeste.Mod.LevelRandomizer.LevelRandomizer.Transition" Collapsed="true">
+        <TypeIdentifier>
+          <NewMemberFileName>LevelRandomizer.cs</NewMemberFileName>
+        </TypeIdentifier>
+      </Class>
+      <Class Name="Celeste.Mod.LevelRandomizer.LevelRandomizer.TransitionMetadata" Collapsed="true">
+        <TypeIdentifier>
+          <NewMemberFileName>LevelRandomizer.cs</NewMemberFileName>
+        </TypeIdentifier>
+      </Class>
+      <Class Name="Celeste.Mod.LevelRandomizer.LevelRandomizer.Debug" Collapsed="true">
+        <TypeIdentifier>
+          <NewMemberFileName>LevelRandomizer.cs</NewMemberFileName>
+        </TypeIdentifier>
+      </Class>
+    </NestedTypes>
+    <TypeIdentifier>
+      <HashCode>AIAEgACAAAAAAgAAAIgEAACAAAAAAABC4AAAAIAAACA=</HashCode>
+      <FileName>LevelRandomizer.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Font Name="Segoe UI" Size="9" />
+</ClassDiagram>
