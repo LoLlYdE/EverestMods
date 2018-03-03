@@ -10,33 +10,45 @@ using MonoMod.Detour;
 namespace Celeste.Mod.LevelRandomizer{
 
     public class LevelRandomizer : EverestModule {
-        
+
+        #region vars
+
         public static LevelRandomizer Instance;
 
         private static string logfile = "TransitionLog.txt";
 
         private static List<TransitionMetadata> transitionMetadata;
-
+        
         public override Type SettingsType => typeof(LevelRandomizerSettings);   
         static LevelRandomizerSettings Settings => (LevelRandomizerSettings)Instance._Settings;
 
         private readonly static MethodInfo m_TransitionTo = typeof(Level).GetMethod("TransitionTo", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
 
+        private readonly static MethodInfo m_LoadLevel = typeof(Level).GetMethod("LoadLevel", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
         public delegate void d_TransitionTo(Level self, LevelData next, Vector2 direction);
 
+        public delegate void d_LoadLevel(Player.IntroTypes playerIntro, bool isFromLoader);
+
         public static d_TransitionTo orig_TransitionTo;
-    
+
+        public static d_LoadLevel orig_LoadLevel;
+
+        #endregion
+
         public LevelRandomizer() {
             Instance = this;
         }
 
         public override void Load() {
 
-            // detour TransitionTo
+            // detours
             Type t_LevelRandomizer = GetType();
-            orig_TransitionTo = m_TransitionTo.Detour<d_TransitionTo>(t_LevelRandomizer.GetMethod("TransitionTo")); 
+            orig_TransitionTo = m_TransitionTo.Detour<d_TransitionTo>(t_LevelRandomizer.GetMethod("TransitionTo"));
+            orig_LoadLevel = m_LoadLevel.Detour<d_LoadLevel>(t_LevelRandomizer.GetMethod("LoadLevel"));
 
-            Everest.Events.LevelEnter.OnGo += LoadLevels;
+            // Events
+            Everest.Events.Level.OnEnter += LoadLevels;
 
             // TODO do I even need this?
             LoadInternalResources();
@@ -44,7 +56,8 @@ namespace Celeste.Mod.LevelRandomizer{
 
         public override void Unload() {
             RuntimeDetour.Undetour(m_TransitionTo);
-            Everest.Events.LevelEnter.OnGo -= LoadLevels;
+            RuntimeDetour.Undetour(m_LoadLevel);
+            Everest.Events.Level.OnEnter -= LoadLevels;
         }
 
         public static void TransitionTo(Level self, LevelData next, Vector2 direction) {
@@ -58,7 +71,7 @@ namespace Celeste.Mod.LevelRandomizer{
                 offsetY = metadata.directionY * 10;
                 if (metadata.directionY < 0)
                     offsetY *= 3;
-                player.Speed = new Vector2(0,0);
+                player.Speed = Vector2.Zero;
                 Vector2 newPlayerPos = new Vector2(metadata.playerX + offsetX, metadata.playerY + offsetY);
                 Vector2 newDirection = new Vector2(metadata.directionX, metadata.directionY);
                 SetPlayerPosition(self, newPlayerPos);
@@ -67,6 +80,14 @@ namespace Celeste.Mod.LevelRandomizer{
             else {
                 orig_TransitionTo(self, next, direction);
             }
+        }
+
+        public static void LoadLevel(Player.IntroTypes playerIntro, bool isFromLoader = false) {
+            if (Settings.Enabled) {
+                if (playerIntro == Player.IntroTypes.Transition)
+                    playerIntro = Player.IntroTypes.Respawn;
+            }
+            orig_LoadLevel(playerIntro, isFromLoader);
         }
 
         private static LevelData getLevelDataByName(string name, Session session) {
@@ -93,7 +114,7 @@ namespace Celeste.Mod.LevelRandomizer{
         }
 
         public static void LoadLevels(Session session, bool fromSaveData) {
-            AssetMetadata metadata = Everest.Content.Get("Transitions/" + session.MapData.Filename);
+            ModAsset metadata = Everest.Content.Get("Transitions/" + session.MapData.Filename);
             if (metadata == null) {
                 Logger.Log("LevelRandomizer", session.MapData.Filename + " not found. Check your mod installation or contact the mod author");
             }
